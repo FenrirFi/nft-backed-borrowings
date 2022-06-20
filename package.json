@@ -10,6 +10,7 @@
     "build": "hardhat clean && hardhat compile",
     "compile": "hardhat compile",
     "clean": "hardhat clean",
+    "test": "hardhat test",
     "prettier": "prettier '**/*.{json,ts,sol,md}' --write",
     "lint": "eslint '**/*.{js,ts}' --fix",
     "lint:sol": "solium -d contracts/ --fix"

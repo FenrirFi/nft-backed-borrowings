@@ -32,6 +32,10 @@ contract SimplePriceOracle is PriceOracle {
         prices[asset] = price;
     }
 
+    function updatePrice(CToken cToken) external {
+        prices[address(cToken)] = prices[address(cToken)];
+    }
+
     // v1 price oracle interface for use as backing of proxy
     function assetPrices(address asset) external view returns (uint) {
         return prices[asset];

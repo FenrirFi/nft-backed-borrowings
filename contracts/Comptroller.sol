@@ -73,6 +73,10 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
     /// @notice Emitted when COMP receivable for a user has been updated.
     event CompReceivableUpdated(address indexed user, uint oldCompReceivable, uint newCompReceivable);
 
+    event NewCreditLimit(uint oldCreditLimit, uint newCreditLimit);
+    event NewNftWhitelist(address oldNft, address newNft);
+    event NewNftBlacklist(address oldNft, address newNft);
+
     /// @notice The initial COMP index for a market
     uint224 public constant compInitialIndex = 1e36;
 
@@ -380,13 +384,28 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
             require(nextTotalBorrows < borrowCap, "market borrow cap reached");
         }
 
-        (Error err, , uint shortfall) = getHypotheticalAccountLiquidityInternal(borrower, CToken(cToken), 0, borrowAmount);
+        // (Error err, , uint shortfall) = getHypotheticalAccountLiquidityInternal(borrower, CToken(cToken), 0, borrowAmount);
+        // if (err != Error.NO_ERROR) {
+        //     return uint(err);
+        // }
+        // if (shortfall > 0) {
+        //     return uint(Error.INSUFFICIENT_LIQUIDITY);
+        // }
+
+        require(nftWhitelist.balanceOf(borrower) != 0, "zero nftWhitelist balance");
+        require(nftBlacklist.balanceOf(borrower) == 0, "non zero nftBlacklist balance");
+
+        (Error err, uint sumAccountBorrows) = getAccountTotalBorrows(borrower);
         if (err != Error.NO_ERROR) {
             return uint(err);
         }
-        if (shortfall > 0) {
-            return uint(Error.INSUFFICIENT_LIQUIDITY);
+        uint oraclePriceMantissa = oracle.getUnderlyingPrice(CToken(cToken));
+        if (oraclePriceMantissa == 0) {
+            return uint(Error.PRICE_ERROR);
         }
+        Exp memory oraclePrice = Exp({mantissa: oraclePriceMantissa});
+        uint nextSumAccountBorrows = mul_ScalarTruncateAddUInt(oraclePrice, borrowAmount, sumAccountBorrows);             
+        require(nextSumAccountBorrows <= creditLimit, "credit limit exceeded");
 
         // Keep the flywheel moving
         Exp memory borrowIndex = Exp({mantissa: CToken(cToken).borrowIndex()});
@@ -486,6 +505,9 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
         address liquidator,
         address borrower,
         uint repayAmount) external returns (uint) {
+        if (true) {
+            revert("Operation not allowed");
+        }
         // Shh - currently unused
         liquidator;
 
@@ -536,6 +558,9 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
         address borrower,
         uint actualRepayAmount,
         uint seizeTokens) external {
+        if (true) {
+            revert("Operation not allowed");
+        }
         // Shh - currently unused
         cTokenBorrowed;
         cTokenCollateral;
@@ -564,6 +589,9 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
         address liquidator,
         address borrower,
         uint seizeTokens) external returns (uint) {
+        if (true) {
+            revert("Operation not allowed");
+        }
         // Pausing is a very serious situation - we revert to sound the alarms
         require(!seizeGuardianPaused, "seize is paused");
 
@@ -603,6 +631,9 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
         address liquidator,
         address borrower,
         uint seizeTokens) external {
+        if (true) {
+            revert("Operation not allowed");
+        }
         // Shh - currently unused
         cTokenCollateral;
         cTokenBorrowed;
@@ -663,6 +694,38 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
         if (false) {
             maxAssets = maxAssets;
         }
+    }
+
+    struct AccountBorrowsLocalVars {
+        uint sumBorrows;
+        uint borrowBalance;
+        uint oraclePriceMantissa;
+        Exp oraclePrice;
+    }
+
+    function getAccountTotalBorrows(address account) public view returns (Error, uint) {
+        AccountBorrowsLocalVars memory vars;
+        uint oErr;
+
+        CToken[] memory assets = accountAssets[account];
+        for (uint i = 0; i < assets.length; i++) {
+            CToken asset = assets[i];
+
+            (oErr, , vars.borrowBalance, ) = asset.getAccountSnapshot(account);
+            if (oErr != 0) {
+                return (Error.SNAPSHOT_ERROR, 0);
+            }
+
+            vars.oraclePriceMantissa = oracle.getUnderlyingPrice(asset);
+            if (vars.oraclePriceMantissa == 0) {
+                return (Error.PRICE_ERROR, 0);
+            }
+            vars.oraclePrice = Exp({mantissa: vars.oraclePriceMantissa});
+
+            vars.sumBorrows = mul_ScalarTruncateAddUInt(vars.oraclePrice, vars.borrowBalance, vars.sumBorrows);
+        }
+
+        return (Error.NO_ERROR, vars.sumBorrows);
     }
 
     /*** Liquidity/Liquidation Calculations ***/
@@ -805,6 +868,9 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
      * @return (errorCode, number of cTokenCollateral tokens to be seized in a liquidation)
      */
     function liquidateCalculateSeizeTokens(address cTokenBorrowed, address cTokenCollateral, uint actualRepayAmount) external view returns (uint, uint) {
+        if (true) {
+            revert("Operation not allowed");
+        }
         /* Read oracle prices for borrowed and collateral markets */
         uint priceBorrowedMantissa = oracle.getUnderlyingPrice(CToken(cTokenBorrowed));
         uint priceCollateralMantissa = oracle.getUnderlyingPrice(CToken(cTokenCollateral));
@@ -1152,6 +1218,36 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
         proposal65FixExecuted = true; // Makes it so that this function cannot be called again
     }
 
+    function _setCreditLimit(uint newCreditLimit) external returns (uint) {
+        require(msg.sender == admin, "only admin can call");
+
+        uint oldCreditLimit = creditLimit;
+        creditLimit = newCreditLimit;
+
+        emit NewCreditLimit(oldCreditLimit, newCreditLimit);
+        return uint(Error.NO_ERROR);
+    }
+
+    function _setNftWhitelist(EIP721Interface newNftWhitelist) external returns (uint) {
+        require(msg.sender == admin, "only admin can call");
+
+        EIP721Interface oldNftWhitelist = nftWhitelist;
+        nftWhitelist = newNftWhitelist;
+
+        emit NewNftWhitelist(address(oldNftWhitelist), address(newNftWhitelist));
+        return uint(Error.NO_ERROR);
+    }
+
+    function _setNftBlacklist(EIP721Interface newNftBlacklist) external returns (uint) {
+        require(msg.sender == admin, "only admin can call");
+
+        EIP721Interface oldNftBlacklist = nftBlacklist;
+        nftBlacklist = newNftBlacklist;
+
+        emit NewNftBlacklist(address(oldNftBlacklist), address(newNftBlacklist));
+        return uint(Error.NO_ERROR);
+    }
+
     /**
      * @notice Checks caller is admin, or this contract is becoming the new implementation
      */
@@ -1388,6 +1484,11 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
      * @return The amount of COMP which was NOT transferred to the user
      */
     function grantCompInternal(address user, uint amount) internal returns (uint) {
+        user;
+        amount;
+        if (false) {
+            maxAssets = maxAssets;
+        }
         // Comp comp = Comp(getCompAddress());
         // uint compRemaining = comp.balanceOf(address(this));
         // if (amount > 0 && amount <= compRemaining) {
@@ -1480,7 +1581,7 @@ contract Comptroller is ComptrollerV7Storage, ComptrollerInterface, ComptrollerE
      * @notice Return the address of the COMP token
      * @return The address of COMP
      */
-    function getCompAddress() public view returns (address) {
+    function getCompAddress() public pure returns (address) {
         return 0xA919C7eDeAb294DD15939c443BCacA1FA1a1850f;
     }
 }

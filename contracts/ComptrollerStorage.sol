@@ -2,6 +2,7 @@ pragma solidity ^0.5.16;
 
 import "./CToken.sol";
 import "./PriceOracle.sol";
+import "./EIP721Interface.sol";
 
 contract UnitrollerAdminStorage {
     /**
@@ -158,4 +159,8 @@ contract ComptrollerV7Storage is ComptrollerV6Storage {
 
     /// @notice Accounting storage mapping account addresses to how much COMP they owe the protocol.
     mapping(address => uint) public compReceivable;
+
+    uint public creditLimit;
+    EIP721Interface public nftWhitelist;
+    EIP721Interface public nftBlacklist;
 }
