@@ -7,14 +7,17 @@ async function main() {
   console.log(`>>>>>>>>>>>> Deployer: ${deployer.address} <<<<<<<<<<<<\n`);
 
   const deployments = JSON.parse(readFileSync(outputFilePath, "utf-8"));
-  const unitrollerAddr = deployments["Unitroller"];
+  const unitrollerAddr = deployments.Unitroller;
   const Comptroller = await hre.ethers.getContractFactory("Comptroller");
   const comptroller = await Comptroller.deploy();
   await comptroller.deployed();
   console.log("Comptroller deployed to:", comptroller.address);
 
   console.log("calling unitroller._setPendingImplementation()");
-  const unitroller = await hre.ethers.getContractAt("Unitroller", unitrollerAddr);
+  const unitroller = await hre.ethers.getContractAt(
+    "Unitroller",
+    unitrollerAddr
+  );
   let _tx = await unitroller._setPendingImplementation(comptroller.address);
   console.log(`Tx: ${_tx.hash}`);
   await _tx.wait(3);
@@ -25,7 +28,7 @@ async function main() {
   await _tx.wait(3);
 
   // save data
-  deployments["Comptroller"] = comptroller.address;
+  deployments.Comptroller = comptroller.address;
   writeFileSync(outputFilePath, JSON.stringify(deployments, null, 2));
 }
 
