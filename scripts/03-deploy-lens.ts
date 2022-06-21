@@ -12,7 +12,7 @@ async function main() {
   const CompoundLens = await ethers.getContractFactory("CompoundLens");
   const compoundLens = await CompoundLens.deploy();
   await compoundLens.deployed();
-  console.log("Comptroller deployed to:", compoundLens.address);
+  console.log("CompoundLens deployed to:", compoundLens.address);
 
   deployments.CompoundLens = compoundLens.address;
   writeFileSync(outputFilePath, JSON.stringify(deployments, null, 2));

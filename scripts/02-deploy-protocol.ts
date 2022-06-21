@@ -8,9 +8,8 @@ const outputFilePath = `./deployments/${hre.network.name}.json`;
 
 // Protocol Params
 const params = {
-  closeFactor: "0.5",
-  liquidationIncentive: "1.08",
-  oracle: "0x0000000000000000000000000000000000000000",
+  creditLimitUsd: 100_000,
+  oracle: "0xfFD6377A08a7dC376f9Af407B485Fa8Af713d0BC",
 };
 
 async function main() {
@@ -42,13 +41,9 @@ async function main() {
     unitroller.address
   )) as Comptroller;
 
-  console.log("calling unitrollerProxy._setCloseFactor()");
-  _tx = await unitrollerProxy._setCloseFactor(numToWei(params.closeFactor, 18));
-  await _tx.wait(3);
-
-  console.log("calling unitrollerProxy._setLiquidationIncentive()");
-  _tx = await unitrollerProxy._setLiquidationIncentive(
-    numToWei(params.liquidationIncentive, 18)
+  console.log("calling unitrollerProxy._setCreditLimit()");
+  _tx = await unitrollerProxy._setCreditLimit(
+    numToWei(params.creditLimitUsd, 18)
   );
   await _tx.wait(3);
 
